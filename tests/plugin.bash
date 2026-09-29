@@ -313,7 +313,8 @@ expect_download_failure 'Invalid or corrupt archive' "$space_root/corrupt" "$cor
 unsafe_dir="$fixture_dir/unsafe"
 unsafe_archive="$unsafe_dir/$darwin_asset"
 mkdir -p "$unsafe_dir"
-tar -C "$payload" -czf "$unsafe_archive" -s '|^dockerfmt$|../evil|' dockerfmt
+touch "$fixture_dir/evil"
+tar -C "$payload" -czf "$unsafe_archive" -P ../evil
 unsafe_metadata="$fixture_dir/unsafe.json"
 write_metadata "$unsafe_metadata" "$unsafe_archive" "$darwin_asset"
 expect_download_failure 'unsafe path' "$space_root/unsafe" "$unsafe_archive" "$unsafe_metadata" Darwin arm64
