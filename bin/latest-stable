@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+plugin_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+
+# shellcheck source=lib/utils.bash
+source "$plugin_dir/lib/utils.bash"
+
+latest=$(list_all_versions | sort_versions | tail -n 1)
+[ -n "$latest" ] || fail 'No supported stable releases were found.'
+printf '%s\n' "$latest"

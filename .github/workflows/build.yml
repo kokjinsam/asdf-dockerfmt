@@ -1,0 +1,79 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    name: Native (${{ matrix.os }})
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-24.04
+          - ubuntu-24.04-arm
+          - macos-15
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Run offline plugin tests
+        run: bash tests/plugin.bash
+      - name: Set up asdf
+        uses: asdf-vm/actions/setup@b7bcd026f18772e44fe1026d729e1611cc435d47 # v4
+        with:
+          asdf_version: 0.16.5
+      - name: Install oldest and current releases
+        shell: bash
+        run: |
+          set -euo pipefail
+          asdf plugin add dockerfmt "$GITHUB_WORKSPACE"
+          oldest=0.3.8
+          current="$(asdf latest dockerfmt)"
+          for version in "$oldest" "$current"; do
+            asdf install dockerfmt "$version"
+            asdf reshim dockerfmt "$version"
+            executable="$(asdf where dockerfmt "$version")/bin/dockerfmt"
+            test -x "$executable"
+            "$GITHUB_WORKSPACE/tests/runtime.bash" "$executable"
+          done
+
+  musl:
+    name: Linux AMD64 musl
+    runs-on: ubuntu-24.04
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Test in Alpine
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -e GITHUB_TOKEN \
+            -v "$GITHUB_WORKSPACE:/workspace:ro" \
+            -v "$RUNNER_TEMP:/tmp/runner" \
+            alpine:3.22 sh -eu -c '
+              apk add --no-cache bash curl git jq tar gzip musl-utils
+              cd /workspace
+              bash tests/plugin.bash
+              mkdir -p /tmp/runner/download /tmp/runner/install
+              ASDF_INSTALL_TYPE=version \
+              ASDF_INSTALL_VERSION=0.5.4 \
+              ASDF_DOWNLOAD_PATH=/tmp/runner/download \
+              bash bin/download
+              ASDF_INSTALL_TYPE=version \
+              ASDF_INSTALL_VERSION=0.5.4 \
+              ASDF_DOWNLOAD_PATH=/tmp/runner/download \
+              ASDF_INSTALL_PATH=/tmp/runner/install \
+              bash bin/install
+              test -x /tmp/runner/install/bin/dockerfmt
+              bash tests/runtime.bash /tmp/runner/install/bin/dockerfmt
+            '
